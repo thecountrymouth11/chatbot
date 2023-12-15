@@ -1,18 +1,23 @@
 import os
 import warnings
+from typing import Dict
+
+from openfabric_pysdk.utility import SchemaUtil
+
 from ontology_dc8f06af066e4a7880a5938933236037.simple_text import SimpleText
 
-from openfabric_pysdk.context import OpenfabricExecutionRay
+from openfabric_pysdk.context import Ray, State
 from openfabric_pysdk.loader import ConfigClass
-from time import time
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering,pipeline
 
+from transformers import AutoTokenizer, OPTForCausalLM
 
+tokenizer = AutoTokenizer.from_pretrained("facebook/galactica-6.7b")
+model = OPTForCausalLM.from_pretrained("facebook/galactica-6.7b", device_map="auto")
 
 ############################################################
 # Callback function called on update config
 ############################################################
-def config(configuration: ConfigClass):
+def config(configuration: Dict[str, ConfigClass], state: State):
     # TODO Add code here
     pass
 
@@ -20,16 +25,15 @@ def config(configuration: ConfigClass):
 ############################################################
 # Callback function called on each execution pass
 ############################################################
-def execute(request: SimpleText, ray: OpenfabricExecutionRay) -> SimpleText:
+def execute(request: SimpleText, ray: Ray, state: State) -> SimpleText:
     output = []
-    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-    model = AutoModelForQuestionAnswering.from_pretrained("distilbert-base-uncased")
-
-    qa_pipeline = pipeline('question-answering', model=model, tokenizer=tokenizer)
-
     for text in request.text:
         # TODO Add code here
-        response = qa_pipeline(text)
+        input_ids = tokenizer(text, return_tensors="pt").input_ids
+        outputs = model.generate(input_ids)
+        response = tokenizer.decode(outputs[0])
         output.append(response)
 
-    return SimpleText(dict(text=output))
+    return SchemaUtil.create(SimpleText(), dict(text=output))
+
+
